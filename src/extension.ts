@@ -3,6 +3,8 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
+
+const StartIndicator = "__polyExeStart__";
 let currentDecorationType: vscode.TextEditorDecorationType | undefined;
 
 function activate(context: vscode.ExtensionContext) {
@@ -59,13 +61,25 @@ function runPythonCode(code: string, editor: vscode.TextEditor) {
         isEmpty = true;
 		displayInlineOutput("", editor);
     } else {
-		const codeSnippet = linesAboveCursor.join('\n');
+		var codeSnippet = linesAboveCursor.join('\n');
 	
 		const functionMatch = codeSnippet.match(/def\s+(\w+)\s*\(.*\)\s*:/);
 		if (functionMatch) {
 			const functionName = functionMatch[1];
 			//console.log(functionName);
 		}
+        
+        if (!currentLineText.includes("(")) {//lines where variables are just changed
+            if (currentLineText.includes("=")) {
+                let rightfromeq = currentLineText.split("=");
+                console.log(rightfromeq);
+                codeSnippet+="\nprint("+rightfromeq[1]+")";
+            } else {
+                codeSnippet+="\nprint("+currentLineText+")";
+            }
+        console.log(codeSnippet);
+        }
+
 		// Check if the code snippet is multi-line
 		if (codeSnippet.includes('\n')) {
 			// Write the code snippet to a temporary file
@@ -96,6 +110,7 @@ function runPythonCode(code: string, editor: vscode.TextEditor) {
 				}
 			});
 		}
+
 	}
 }
 
@@ -105,10 +120,22 @@ function displayInlineOutput(output: string, editor: vscode.TextEditor) {
 	const line = editor.document.lineAt(cursorPosition.line);
     const endOfLine = line.range.end;
     const range = new vscode.Range(endOfLine, endOfLine);
+    const multiLine = false;
+    var pmostRecentOutput = "";
 
-	// Split the output by newlines and filter out empty lines
-	const outputLines = output.split('\n').filter(line => line.trim() !== '');
-	const mostRecentOutput = outputLines.pop() || '';
+    if (multiLine) {
+        const outputLines = output.replace("\n", "\\n");//show multiple lines with a representative newline esc char
+        if (outputLines.endsWith("\\n")) {//check if it ends with a newline
+            pmostRecentOutput = outputLines.slice(0, -2);//Remove the last newline escape character
+        } else {
+            pmostRecentOutput = outputLines;//Remove the last newline escape character
+        }
+    } else {
+        // Split the output by newlines and filter out empty lines
+    	const outputLines = output.split('\n').filter(line => line.trim() !== '');
+        pmostRecentOutput = outputLines.pop() || '';
+    }
+    const mostRecentOutput = pmostRecentOutput;
 
     // Clear the previous decoration if it exists
     if (currentDecorationType) {
@@ -130,7 +157,7 @@ function displayInlineOutput(output: string, editor: vscode.TextEditor) {
         range: range,
         renderOptions: {
             after: {
-                contentText: ` # ${mostRecentOutput.trim()}`,
+                contentText: ` // ${mostRecentOutput.trim()}`,
                 color: 'grey'
             }
         }
